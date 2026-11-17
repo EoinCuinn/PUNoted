@@ -83,7 +83,7 @@ export interface OrderItem {
 	vendorid: string;
 	reserved: number;
 	price?: {
-		fixedprice: number;
+		fixedprice?: number;
 		corpprice?: number;
 		cxprice?: number;
 	};
@@ -349,9 +349,11 @@ const VendorPrioritySelector: React.FC<{
 					>
 						<Typography
 							variant="body2"
-							color="text.secondary"
-							fontWeight="bold"
-							sx={{ minWidth: 20 }}
+							sx={{
+								color: "text.secondary",
+								fontWeight: "bold",
+								minWidth: 20,
+							}}
 						>
 							#{index + 1}
 						</Typography>
@@ -597,13 +599,13 @@ const CompactListItem: React.FC<{
 					>
 						<Typography
 							variant="body1"
-							fontWeight="900"
 							sx={{
 								flex: 2,
 								display: "flex",
 								justifyContent: "center",
 								alignItems: "center",
 								fontSize: "1.1rem",
+								fontWeight: 900,
 								color: theme.palette.text.primary,
 								textAlign: "center",
 							}}
@@ -1060,7 +1062,7 @@ const OrderSummaryPanel: React.FC<{
 											color={theme.palette.warning.main}
 										/>
 									)}
-									<Typography variant="subtitle2" fontWeight="bold">
+									<Typography variant="subtitle2" sx={{ fontWeight: "bold" }}>
 										{formatLocationLabel(locationName, locationCode)}
 									</Typography>
 								</Box>
@@ -1509,7 +1511,6 @@ const AvailableMaterialsPanel: React.FC<{
 					title="IMPORT MATERIALS"
 					actionLabel="IMPORT"
 					onAction={handleImport}
-					cancelColor="primary"
 				>
 					<TextField
 						autoFocus
@@ -1580,6 +1581,16 @@ const ShoppingListModal: React.FC<{
 	);
 	const [showHelp, setShowHelp] = useState(false);
 	const [showSummary, setShowSummary] = useState(false);
+
+	const [toast, setToast] = useState<{
+		open: boolean;
+		message: string;
+		color: "success" | "error";
+	}>({
+		open: false,
+		message: "",
+		color: "success",
+	});
 
 	// UI states
 	const [showAddItems, setShowAddItems] = useState(false);
@@ -1935,6 +1946,34 @@ const ShoppingListModal: React.FC<{
 		}
 	};
 
+	const handleCopyAllContd = async () => {
+		if (shoppingList.length === 0) return;
+		try {
+			const loc = selectedLocation || "";
+
+			const lines = [
+				"template\tBUY",
+				"currency\tICA",
+				`location\t${loc}`,
+				"deadline\t5",
+				...shoppingList.map((item) => {
+					const price = inventoryMap[item.materialticker]?.[0]?.fixedprice || 0;
+					return `${item.quantity}\t${item.materialticker}\t${price}`;
+				}),
+			];
+
+			await navigator.clipboard.writeText(lines.join("\n"));
+
+			setToast({
+				open: true,
+				message: `Copied ${shoppingList.length} items to CONTD format!`,
+				color: "success",
+			});
+		} catch (error) {
+			console.error("Failed to copy contract:", error);
+		}
+	};
+
 	const grandTotal = shoppingSummary.reduce((s, i) => s + i.totalPrice, 0);
 
 	if (isLoading || !isMaterialDataLoaded) {
@@ -2047,6 +2086,21 @@ const ShoppingListModal: React.FC<{
 										CONTRACTS
 									</Button>
 								)}
+								<Tooltip title="Copy entire shopping list as single CONTD import (ignores stock)">
+									<span>
+										<Button
+											size="small"
+											variant="outlined"
+											color="primary"
+											startIcon={<ContentCopy className="inline-icon" />}
+											onClick={handleCopyAllContd}
+											disabled={shoppingList.length === 0}
+											sx={{ fontWeight: "bold" }}
+										>
+											COPY CONTD
+										</Button>
+									</span>
+								</Tooltip>
 								<InlineConfirmButton
 									buttonText="CLEAR"
 									icon={<Trash2 className="inline-icon" />}
@@ -2266,6 +2320,12 @@ const ShoppingListModal: React.FC<{
 					</ol>
 				</Typography>
 			</Modal>
+			<Toast
+				open={toast.open}
+				message={toast.message}
+				color={toast.color}
+				onClose={() => setToast((prev) => ({ ...prev, open: false }))}
+			/>
 		</Box>
 	);
 };
