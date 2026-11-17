@@ -57,6 +57,7 @@ import LocationFilter, {
 } from "./components/locationfilter";
 import InlineConfirmButton from "../components/inlineconfirmbutton";
 import { Modal } from "./modal";
+import VendorLastActiveIndicator from "./components/vendorlastactiveindicator";
 import { useGlobalData } from "../../context/globaldatacontext";
 import {
 	formatLocation as formatLocationLabel,
@@ -105,6 +106,7 @@ export interface VendorStore {
 		companycode: string;
 		companyname: string;
 		gamename: string;
+		activity?: string;
 		cx?: string;
 	};
 	orders: OrderItem[];
@@ -817,10 +819,11 @@ const CompactListItem: React.FC<{
  */
 const SummaryVendorGroup: React.FC<{
 	gameName: string;
+	activity?: string;
 	items: ShoppingSummaryItem[];
 	total: number;
 	onCopyContract: () => void;
-}> = ({ gameName, items, total, onCopyContract }) => {
+}> = ({ gameName, activity, items, total, onCopyContract }) => {
 	const theme = useTheme();
 	const formattedTotal = formatPrice(total);
 
@@ -848,7 +851,10 @@ const SummaryVendorGroup: React.FC<{
 				<Box>
 					<Typography variant="subtitle2" sx={{ fontWeight: "bold" }}>
 						<Store className="inline-icon" color={theme.palette.primary.main} />{" "}
-						{gameName}
+						{gameName}{" "}
+						<Box component="span" sx={{ color: theme.palette.text.secondary }}>
+							<VendorLastActiveIndicator vendor={{ activity }} />
+						</Box>
 					</Typography>
 					<Typography variant="subtitle2">
 						{formattedTotal === "N/A" ? (
@@ -960,6 +966,7 @@ const SummaryVendorGroup: React.FC<{
 };
 
 const OrderSummaryPanel: React.FC<{
+	vendors: VendorStore[];
 	groups: SummaryLocationGroup[];
 	onCopyContract: (locationCode: string, items: ShoppingSummaryItem[]) => void;
 	onClose?: () => void;
@@ -967,6 +974,7 @@ const OrderSummaryPanel: React.FC<{
 	insufficientStock: boolean;
 	grandTotal: number;
 }> = ({
+	vendors,
 	groups,
 	onCopyContract,
 	onClose,
@@ -1083,6 +1091,12 @@ const OrderSummaryPanel: React.FC<{
 										<SummaryVendorGroup
 											key={vendor.vendorId}
 											gameName={vendor.gameName}
+											activity={
+												vendors.find(
+													({ vendor: details }) =>
+														details.vendorid === vendor.vendorId,
+												)?.vendor.activity
+											}
 											items={vendor.items}
 											total={vendor.total}
 											onCopyContract={() =>
@@ -2150,6 +2164,7 @@ const ShoppingListModal: React.FC<{
 							}}
 						>
 							<OrderSummaryPanel
+								vendors={vendors}
 								groups={groupedSummary}
 								onCopyContract={handleCopyContract}
 								onHelp={() => setShowHelp(true)}
@@ -2255,6 +2270,7 @@ const ShoppingListModal: React.FC<{
 				sx={{ zIndex: 9999 }}
 			>
 				<OrderSummaryPanel
+					vendors={vendors}
 					groups={groupedSummary}
 					onCopyContract={handleCopyContract}
 					onHelp={() => setShowHelp(true)}
