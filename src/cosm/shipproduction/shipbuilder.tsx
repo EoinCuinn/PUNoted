@@ -1287,7 +1287,7 @@ export const ShipBuilder: React.FC<ShipBuilderProps> = ({
 						<Typography
 							sx={{ fontSize: "12px", color: "rgba(255,255,255,0.55)" }}
 						>
-							{selectedPreset.hullPlatesExcluded ? "CX full-ship" : "CX price"}
+							{selectedPreset.hullPlatesExcluded ? "CX kit" : "CX price"}
 						</Typography>
 						<Typography
 							sx={{
@@ -1372,8 +1372,7 @@ export const ShipBuilder: React.FC<ShipBuilderProps> = ({
 								color: "#ff9800",
 							}}
 						>
-							Full-ship BOM — the upgrade kit reuses existing components; the CX
-							figure is an upper bound, not the kit's part cost.
+							Kit contents — reuses the starter ship's existing components.
 						</Typography>
 					)}
 					{isCorpMember && !selectedPreset.priceCorp && (
@@ -1751,7 +1750,9 @@ export const ShipBuilder: React.FC<ShipBuilderProps> = ({
 					variant="caption"
 					sx={{ mb: 0.5, color: "#7b68ee", display: "block", fontSize: "12px" }}
 				>
-					BILL OF MATERIALS
+					{selectedPreset?.hullPlatesExcluded
+						? "KIT CONTENTS"
+						: "BILL OF MATERIALS"}
 				</Typography>
 
 				<Box

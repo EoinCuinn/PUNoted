@@ -61,20 +61,15 @@ export const COSM_PREBUILT_BUILDS: CosmPrebuiltBuild[] = [
 			CARGO_BAY: "CARGO_BAY_HIGH_LOAD",
 			HULL_TYPE: "HULL_PLATES_LIGHTWEIGHT",
 		}),
+		// Kit contents only. The starter ship's existing bridge, crew quarters,
+		// engine, FFC, emitters, reactor, and 46 SSC are reused; hull plates are
+		// not included. Source: COSM's shipbuilding sheet.
 		parts: [
-			{ name: "BR1", quantity: 1 },
-			{ name: "CQS", quantity: 1 },
-			{ name: "ENG", quantity: 1 },
-			{ name: "FFC", quantity: 1 },
+			{ name: "WCB", quantity: 1 },
 			{ name: "LFE", quantity: 1 },
 			{ name: "LFL", quantity: 1 },
-			{ name: "LHP", quantity: 68 },
-			{ name: "MFE", quantity: 2 },
 			{ name: "MSL", quantity: 1 },
-			{ name: "RCT", quantity: 1 },
-			{ name: "SFE", quantity: 1 },
-			{ name: "SSC", quantity: 78 },
-			{ name: "WCB", quantity: 1 },
+			{ name: "SSC", quantity: 32 },
 		],
 	},
 	{

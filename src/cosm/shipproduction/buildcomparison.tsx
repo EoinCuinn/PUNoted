@@ -163,7 +163,7 @@ const BuildComparison: React.FC<BuildComparisonProps> = ({
 															mt: 0.2,
 														}}
 													>
-														Full-ship BOM — kit reuses components
+														Kit contents — reuses starter components
 													</Typography>
 												</>
 											)}
@@ -197,7 +197,6 @@ const BuildComparison: React.FC<BuildComparisonProps> = ({
 											}}
 										>
 											₳{cx.toLocaleString()}
-											{build.hullPlatesExcluded ? " †" : ""}
 										</TableCell>
 										<TableCell
 											sx={{
@@ -232,18 +231,9 @@ const BuildComparison: React.FC<BuildComparisonProps> = ({
 				sx={{ color: "rgba(255,255,255,0.4)", fontSize: "11px" }}
 			>
 				{cxLabel}. CX is the live IC1 parts cost; it excludes build time and
-				logistics.
+				logistics. The Starter row is the kit contents; the finished ship reuses
+				the starter's existing components.
 			</Typography>
-			{rows.some(({ build }) => build.hullPlatesExcluded) && (
-				<Typography
-					variant="caption"
-					sx={{ color: "#ff9800", fontSize: "11px" }}
-				>
-					† Starter: the CX figure is the full finished ship's BOM. The upgrade
-					kit reuses existing components, so it is an upper bound, not the kit's
-					part cost. Hull plates are excluded.
-				</Typography>
-			)}
 		</Box>
 	);
 };
