@@ -50,6 +50,7 @@ interface ShipBuilderProps {
 	onOrderCreated: (guestPin?: string) => void;
 	editingOrderId?: string | null;
 	onCancelEdit?: () => void;
+	defaultPresetId?: string;
 }
 
 export const ShipBuilder: React.FC<ShipBuilderProps> = ({
@@ -57,6 +58,7 @@ export const ShipBuilder: React.FC<ShipBuilderProps> = ({
 	onOrderCreated,
 	editingOrderId,
 	onCancelEdit,
+	defaultPresetId,
 }) => {
 	const theme = useTheme();
 	const isMobileViewport = useMediaQuery(theme.breakpoints.down("md"));
@@ -89,17 +91,27 @@ export const ShipBuilder: React.FC<ShipBuilderProps> = ({
 		setIsCustomPrice,
 		waitTime,
 		createdPin,
+		createdPinDryRun,
 		setCreatedPin,
+		setCreatedPinDryRun,
 		presetDiffs,
 		dynamicStats,
 		partsList,
+		cxPartsCost,
+		cxUpdatedAt,
 		performanceSum,
 		cxTotalPrice,
 		handleSaveOrder,
 		handleDeleteOrder,
 		availablePresets,
+		selectedPreset,
 		handleSavePreset,
-	} = useShipBuilder({ mockRole, onOrderCreated, editingOrderId });
+	} = useShipBuilder({
+		mockRole,
+		onOrderCreated,
+		editingOrderId,
+		defaultPresetId,
+	});
 
 	const [isPresetDialogOpen, setIsPresetDialogOpen] = React.useState(false);
 	const [presetName, setPresetName] = React.useState("");
@@ -133,6 +145,28 @@ export const ShipBuilder: React.FC<ShipBuilderProps> = ({
 	const isFullScreenMode = !!editingOrderId;
 	const disableMetadataFields = isFullScreenMode && mockRole !== "ADMIN";
 	const buildTimeHours = Math.round(performanceSum.weight / 50);
+
+	const publicPrice = selectedPreset?.price ?? 0;
+	const corpPrice = selectedPreset
+		? (selectedPreset.priceCorp ?? selectedPreset.price)
+		: 0;
+	const cxPartsTotal = cxPartsCost?.total ?? 0;
+	const corpDifference = corpPrice - cxPartsTotal;
+	const publicDifference = publicPrice - cxPartsTotal;
+	const differencePct = (diff: number) =>
+		cxPartsTotal > 0 ? Math.abs((diff / cxPartsTotal) * 100) : 0;
+	const corpLabel =
+		corpDifference <= 0 ? "CORP is cheaper by" : "CX is cheaper by";
+	const publicLabel =
+		publicDifference <= 0 ? "PUBLIC is cheaper by" : "CX is cheaper by";
+	const cxIsStale =
+		cxUpdatedAt !== null && Date.now() - cxUpdatedAt > 10 * 60 * 1000;
+	const cxUpdatedLabel = cxUpdatedAt
+		? `CX prices updated ${new Date(cxUpdatedAt).toLocaleTimeString([], {
+				hour: "2-digit",
+				minute: "2-digit",
+			})}${cxIsStale ? " — may be stale" : ""}`
+		: "CX prices not loaded yet";
 
 	const MetadataRow = (
 		<Paper
@@ -311,7 +345,7 @@ export const ShipBuilder: React.FC<ShipBuilderProps> = ({
 			) : (
 				<Grid
 					container
-					spacing={0.8}
+					spacing={1}
 					alignItems="center"
 					justifyContent="center"
 				>
@@ -320,10 +354,12 @@ export const ShipBuilder: React.FC<ShipBuilderProps> = ({
 							item
 							xs={6}
 							sm={3}
-							md={2}
-							sx={{ display: "flex", justifyContent: "center" }}
+							md={1.5}
+							lg={1.5}
+							sx={{ display: "flex", alignItems: "center", height: 38 }}
 						>
 							<FormControlLabel
+								sx={{ m: 0 }}
 								control={
 									<Switch
 										checked={testMode}
@@ -339,6 +375,7 @@ export const ShipBuilder: React.FC<ShipBuilderProps> = ({
 											color: testMode ? "#ff9800" : "rgba(255,255,255,0.5)",
 											fontWeight: "bold",
 											fontSize: "12px",
+											whiteSpace: "nowrap",
 										}}
 									>
 										TEST MODE
@@ -347,66 +384,42 @@ export const ShipBuilder: React.FC<ShipBuilderProps> = ({
 							/>
 						</Grid>
 					)}
-					<Grid
-						item
-						xs={6}
-						sm={3}
-						md={2.5}
-						sx={{ display: "flex", justifyContent: "center" }}
-					>
+					<Grid item xs={6} sm={3} md={2} lg={2}>
 						<TextField
 							label="Company"
 							value={companyCode}
 							disabled={testMode || disableMetadataFields}
 							onChange={(e) => setCompanyCode(e.target.value)}
 							size="small"
-							sx={{ width: "95%", ...inputStyle }}
-							inputProps={{
-								style: {
-									textAlign: "center",
-									fontSize: "12px",
-									padding: "6px",
-								},
-							}}
-							InputLabelProps={{ style: { fontSize: "12px" } }}
+							fullWidth
+							sx={metadataFieldStyle}
 						/>
 					</Grid>
-					<Grid
-						item
-						xs={6}
-						sm={3}
-						md={2}
-						sx={{ display: "flex", justifyContent: "center" }}
-					>
+					<Grid item xs={6} sm={3} md={2} lg={2}>
 						<TextField
 							label="User"
 							value={username}
 							disabled={testMode || disableMetadataFields}
 							onChange={(e) => setUsername(e.target.value)}
 							size="small"
-							sx={{ width: "95%", ...inputStyle }}
-							inputProps={{
-								style: {
-									textAlign: "center",
-									fontSize: "12px",
-									padding: "6px",
-								},
-							}}
-							InputLabelProps={{ style: { fontSize: "12px" } }}
+							fullWidth
+							sx={metadataFieldStyle}
 						/>
 					</Grid>
 					<Grid
 						item
 						xs={6}
 						sm={3}
-						md={2.5}
+						md={1}
+						lg={1}
 						sx={{
 							display: "flex",
 							alignItems: "center",
-							justifyContent: "center",
+							height: 38,
 						}}
 					>
 						<FormControlLabel
+							sx={{ m: 0 }}
 							control={
 								<Checkbox
 									checked={isCorpMember}
@@ -428,73 +441,70 @@ export const ShipBuilder: React.FC<ShipBuilderProps> = ({
 											color: isCorpMember ? "#10b981" : "rgba(255,255,255,0.4)",
 										}}
 									/>
-									<Typography variant="caption" sx={{ fontSize: "12px" }}>
+									<Typography
+										variant="caption"
+										sx={{ fontSize: "12px", whiteSpace: "nowrap" }}
+									>
 										Corp
 									</Typography>
 								</Stack>
 							}
 						/>
 					</Grid>
-					<Grid item xs={12} sm={6} md={3}>
-						<Stack direction="row" spacing={1} justifyContent="center">
-							<TextField
-								select
-								size="small"
-								label="Preset"
-								value={selectedPresetId}
-								disabled={disableMetadataFields}
-								onChange={(e) => handlePresetChange(e.target.value)}
-								sx={{ minWidth: 80, ...selectStyle }}
-								SelectProps={{ style: { fontSize: "12px", padding: "4px" } }}
-								InputLabelProps={{ style: { fontSize: "12px" } }}
-							>
-								{isAdmin && (
-									<MenuItem value="custom" sx={{ fontSize: "12px" }}>
-										Custom
-									</MenuItem>
-								)}
-								{availablePresets.map((p) => (
-									<MenuItem
-										key={p.id}
-										value={p.id?.toString()}
-										sx={{ fontSize: "12px" }}
-									>
-										{p.name}
-									</MenuItem>
-								))}
-							</TextField>
-							<TextField
-								select
-								size="small"
-								label="Class"
-								value={shipClass}
-								disabled={!isAdmin}
-								onChange={(e) => setShipClass(e.target.value as any)}
-								sx={{ minWidth: 80, ...selectStyle }}
-								SelectProps={{ style: { fontSize: "12px", padding: "4px" } }}
-								InputLabelProps={{ style: { fontSize: "12px" } }}
-							>
-								<MenuItem value="REGULAR" sx={{ fontSize: "12px" }}>
-									Regular
-								</MenuItem>
-								<MenuItem value="COLONY_SHIP" sx={{ fontSize: "12px" }}>
-									Colony
-								</MenuItem>
-							</TextField>
-						</Stack>
-					</Grid>
-					<Grid item xs={12} sx={{ mt: 0.5 }}>
+					<Grid item xs={6} sm={3} md={2} lg={2}>
 						<TextField
-							label="Special Notes / Instructions"
+							select
+							size="small"
+							label="Preset"
+							value={selectedPresetId}
+							disabled={disableMetadataFields}
+							onChange={(e) => handlePresetChange(e.target.value)}
+							fullWidth
+							sx={metadataFieldStyle}
+						>
+							{isAdmin && (
+								<MenuItem value="custom" sx={{ fontSize: "12px" }}>
+									Custom
+								</MenuItem>
+							)}
+							{availablePresets.map((p) => (
+								<MenuItem
+									key={p.id}
+									value={p.id?.toString()}
+									sx={{ fontSize: "12px" }}
+								>
+									{p.name}
+								</MenuItem>
+							))}
+						</TextField>
+					</Grid>
+					<Grid item xs={6} sm={3} md={1.5} lg={1.5}>
+						<TextField
+							select
+							size="small"
+							label="Class"
+							value={shipClass}
+							disabled={!isAdmin}
+							onChange={(e) => setShipClass(e.target.value as any)}
+							fullWidth
+							sx={metadataFieldStyle}
+						>
+							<MenuItem value="REGULAR" sx={{ fontSize: "12px" }}>
+								Regular
+							</MenuItem>
+							<MenuItem value="COLONY_SHIP" sx={{ fontSize: "12px" }}>
+								Colony
+							</MenuItem>
+						</TextField>
+					</Grid>
+					<Grid item xs={12} sm={6} md={2} lg={2}>
+						<TextField
+							label="Special Notes"
 							value={specialNeeds}
 							onChange={(e) => setSpecialNeeds(e.target.value)}
 							size="small"
 							fullWidth
-							multiline
-							rows={1.5}
-							sx={inputStyle}
-							InputLabelProps={{ style: { fontSize: "12px" } }}
-							inputProps={{ style: { fontSize: "12px" } }}
+							sx={metadataFieldStyle}
 						/>
 					</Grid>
 				</Grid>
@@ -525,7 +535,11 @@ export const ShipBuilder: React.FC<ShipBuilderProps> = ({
 					color="rgba(255,255,255,0.4)"
 					sx={{ fontSize: "12px", fontWeight: "bold" }}
 				>
-					{testMode ? "ESTIMATED CX PRICE:" : "PRICE:"}
+					{testMode
+						? "ESTIMATED CX PRICE:"
+						: isCorpMember
+							? "CORP PRICE:"
+							: "PUBLIC PRICE:"}
 				</Typography>
 				<Typography
 					variant="body2"
@@ -1100,7 +1114,11 @@ export const ShipBuilder: React.FC<ShipBuilderProps> = ({
 								color="rgba(255,255,255,0.4)"
 								sx={{ fontSize: "12px" }}
 							>
-								{testMode ? "ESTIMATED CX PRICE" : "PRICE"}
+								{testMode
+									? "ESTIMATED CX PRICE"
+									: isCorpMember
+										? "CORP PRICE"
+										: "PUBLIC PRICE"}
 							</Typography>
 							<Typography
 								variant="body1"
@@ -1194,6 +1212,224 @@ export const ShipBuilder: React.FC<ShipBuilderProps> = ({
 							inputProps={{ style: { fontSize: "12px", padding: "4px" } }}
 						/>
 					)}
+				</Paper>
+			)}
+
+			{/* COSM build vs CX parts comparison */}
+			{selectedPreset && (
+				<Paper
+					sx={{
+						p: 1.2,
+						borderRadius: "12px",
+						background: "rgba(25, 24, 35, 0.85)",
+						border: "1px solid rgba(123, 104, 238, 0.25)",
+						width: "100%",
+					}}
+				>
+					<Typography
+						variant="caption"
+						sx={{
+							mb: 0.5,
+							color: "#7b68ee",
+							fontWeight: "bold",
+							display: "block",
+							textAlign: "center",
+							fontSize: "12px",
+							textTransform: "uppercase",
+						}}
+					>
+						COSM Build vs CX Parts
+					</Typography>
+					<Box
+						sx={{
+							display: "grid",
+							gridTemplateColumns: "1fr auto",
+							columnGap: 2,
+							rowGap: 0.8,
+							alignItems: "center",
+							mt: 0.6,
+						}}
+					>
+						<Typography
+							sx={{ fontSize: "12px", color: "rgba(255,255,255,0.55)" }}
+						>
+							PUBLIC price
+						</Typography>
+						<Typography
+							sx={{
+								fontSize: "13px",
+								fontWeight: "bold",
+								color: "#e0e0e0",
+								textAlign: "right",
+								fontVariantNumeric: "tabular-nums",
+							}}
+						>
+							₳ {publicPrice.toLocaleString()}
+						</Typography>
+
+						<Typography
+							sx={{ fontSize: "12px", color: "rgba(255,255,255,0.55)" }}
+						>
+							CORP price
+						</Typography>
+						<Typography
+							sx={{
+								fontSize: "13px",
+								fontWeight: "bold",
+								color: "#4caf50",
+								textAlign: "right",
+								fontVariantNumeric: "tabular-nums",
+							}}
+						>
+							₳ {corpPrice.toLocaleString()}
+						</Typography>
+
+						<Typography
+							sx={{ fontSize: "12px", color: "rgba(255,255,255,0.55)" }}
+						>
+							{selectedPreset.hullPlatesExcluded ? "CX full-ship" : "CX price"}
+						</Typography>
+						<Typography
+							sx={{
+								fontSize: "13px",
+								fontWeight: "bold",
+								color: "#2196f3",
+								textAlign: "right",
+								fontVariantNumeric: "tabular-nums",
+							}}
+						>
+							₳ {cxPartsTotal.toLocaleString()}
+						</Typography>
+
+						<Divider
+							sx={{
+								gridColumn: "1 / -1",
+								borderColor: "rgba(255,255,255,0.1)",
+								my: 0.4,
+							}}
+						/>
+
+						<Typography
+							sx={{ fontSize: "12px", color: "rgba(255,255,255,0.55)" }}
+						>
+							{corpLabel}
+						</Typography>
+						<Typography
+							sx={{
+								fontSize: "13px",
+								fontWeight: "bold",
+								color: corpDifference <= 0 ? "#10b981" : "#ff9800",
+								textAlign: "right",
+								fontVariantNumeric: "tabular-nums",
+							}}
+						>
+							₳ {Math.abs(corpDifference).toLocaleString()}
+							{cxPartsTotal > 0
+								? ` (${differencePct(corpDifference).toFixed(0)}%)`
+								: ""}
+						</Typography>
+
+						<Typography
+							sx={{ fontSize: "12px", color: "rgba(255,255,255,0.55)" }}
+						>
+							{publicLabel}
+						</Typography>
+						<Typography
+							sx={{
+								fontSize: "13px",
+								fontWeight: "bold",
+								color: publicDifference <= 0 ? "#10b981" : "#ff9800",
+								textAlign: "right",
+								fontVariantNumeric: "tabular-nums",
+							}}
+						>
+							₳ {Math.abs(publicDifference).toLocaleString()}
+							{cxPartsTotal > 0
+								? ` (${differencePct(publicDifference).toFixed(0)}%)`
+								: ""}
+						</Typography>
+					</Box>
+					{selectedPreset.hullPlatesExcluded && (
+						<Typography
+							variant="caption"
+							sx={{
+								display: "block",
+								mt: 0.4,
+								fontSize: "11px",
+								color: "rgba(255,255,255,0.4)",
+							}}
+						>
+							COSM kit excludes hull plates; the CX total also excludes them.
+						</Typography>
+					)}
+					{selectedPreset.hullPlatesExcluded && (
+						<Typography
+							variant="caption"
+							sx={{
+								display: "block",
+								mt: 0.2,
+								fontSize: "11px",
+								color: "#ff9800",
+							}}
+						>
+							Full-ship BOM — the upgrade kit reuses existing components; the CX
+							figure is an upper bound, not the kit's part cost.
+						</Typography>
+					)}
+					{isCorpMember && !selectedPreset.priceCorp && (
+						<Typography
+							variant="caption"
+							sx={{
+								display: "block",
+								mt: 0.2,
+								fontSize: "11px",
+								color: "#ff9800",
+							}}
+						>
+							Corp rate not set for this build — showing the standard price.
+						</Typography>
+					)}
+					{(cxPartsCost?.estimatedCount ?? 0) > 0 && (
+						<Typography
+							variant="caption"
+							sx={{
+								display: "block",
+								mt: 0.2,
+								fontSize: "11px",
+								color: "#ff9800",
+							}}
+						>
+							{cxPartsCost.estimatedCount} part
+							{cxPartsCost.estimatedCount === 1 ? "" : "s"} used a built-in
+							estimate (no live IC1 price).
+						</Typography>
+					)}
+					{(cxPartsCost?.missingCount ?? 0) > 0 && (
+						<Typography
+							variant="caption"
+							sx={{
+								display: "block",
+								mt: 0.2,
+								fontSize: "11px",
+								color: "#ff5252",
+							}}
+						>
+							{cxPartsCost.missingCount} part
+							{cxPartsCost.missingCount === 1 ? "" : "s"} had no price and
+							{""} were left out.
+						</Typography>
+					)}
+					<Typography
+						variant="caption"
+						sx={{
+							display: "block",
+							mt: 0.6,
+							fontSize: "11px",
+							color: cxIsStale ? "#ff9800" : "rgba(255,255,255,0.4)",
+						}}
+					>
+						{cxUpdatedLabel}
+					</Typography>
 				</Paper>
 			)}
 
@@ -1537,42 +1773,78 @@ export const ShipBuilder: React.FC<ShipBuilderProps> = ({
 								No parts required.
 							</Typography>
 						) : (
-							partsList.map((part) => (
-								<Stack
-									key={part.name}
-									sx={{
-										p: 0.3,
-										px: 0.6,
-										background: "rgba(25, 25, 255, 0.03)",
-										borderRadius: "4px",
-										border: "1px solid rgba(255,255,255,0.05)",
-										display: "flex",
-										alignItems: "center",
-										justifyContent: "center",
-										flexDirection: "row",
-										gap: 0.2,
-									}}
-								>
-									<Typography
-										variant="caption"
-										sx={{ fontSize: "12px", fontWeight: "bold" }}
-									>
-										{part.quantity}x
-									</Typography>
-									<Box
+							partsList.map((part) => {
+								const isExcluded =
+									selectedPreset?.hullPlatesExcluded &&
+									part.name === "LHP";
+								return (
+									<Stack
+										key={part.name}
 										sx={{
-											display: "inline-block",
-											transform: "scale(0.7)",
-											transformOrigin: "left center",
+											p: 0.3,
+											px: 0.6,
+											background: "rgba(25, 25, 255, 0.03)",
+											borderRadius: "4px",
+											border: isExcluded
+												? "1px dashed rgba(255,152,0,0.6)"
+												: "1px solid rgba(255,255,255,0.05)",
+											opacity: isExcluded ? 0.55 : 1,
+											display: "flex",
+											alignItems: "center",
+											justifyContent: "center",
+											flexDirection: "row",
+											gap: 0.2,
 										}}
 									>
-										<MaterialBadge ticker={part.name} />
-									</Box>
-								</Stack>
-							))
+										<Typography
+											variant="caption"
+											sx={{ fontSize: "12px", fontWeight: "bold" }}
+										>
+											{part.quantity}x
+										</Typography>
+										<Box
+											sx={{
+												display: "inline-block",
+												transform: "scale(0.7)",
+												transformOrigin: "left center",
+											}}
+										>
+											<MaterialBadge ticker={part.name} />
+										</Box>
+										{isExcluded && (
+											<Typography
+												variant="caption"
+												sx={{
+													fontSize: "9px",
+													color: "#ff9800",
+													whiteSpace: "nowrap",
+												}}
+											>
+												not incl.
+											</Typography>
+										)}
+									</Stack>
+								);
+							})
 						)}
 					</Box>
 				</Box>
+				{import.meta.env.VITE_ORDER_DRY_RUN === "true" && (
+					<Typography
+						variant="caption"
+						sx={{
+							display: "block",
+							mb: 0.5,
+							textAlign: "center",
+							fontSize: "10px",
+							fontWeight: "bold",
+							color: "#ff9800",
+							letterSpacing: 0.5,
+						}}
+					>
+						DRY RUN — this button sends nothing
+					</Typography>
+				)}
 				<Button
 					variant="contained"
 					fullWidth
@@ -1770,13 +2042,19 @@ export const ShipBuilder: React.FC<ShipBuilderProps> = ({
 					gap: 2,
 				}}
 			>
-				<CheckCircleIcon sx={{ fontSize: 60, color: "#4caf50" }} />
+				<CheckCircleIcon
+					sx={{
+						fontSize: 60,
+						color: createdPinDryRun ? "#ff9800" : "#4caf50",
+					}}
+				/>
 				<Typography variant="h5" fontWeight="bold">
-					Order Recorded
+					{createdPinDryRun ? "Dry Run — Order Not Sent" : "Order Recorded"}
 				</Typography>
 				<Typography variant="body2" sx={{ color: "rgba(255,255,255,0.7)" }}>
-					The order is currently in review. You can track this order or edit it
-					later by utilizing the following PIN code:
+					{createdPinDryRun
+						? "This was a local dry run. No order was created on PUNoted."
+						: "The order is currently in review. You can track this order or edit it later by utilizing the following PIN code:"}
 				</Typography>
 				<Typography
 					variant="h3"
@@ -1786,8 +2064,9 @@ export const ShipBuilder: React.FC<ShipBuilderProps> = ({
 					{createdPin}
 				</Typography>
 				<Typography variant="caption" color="rgba(255,255,255,0.4)">
-					Make sure to save this PIN. You will need it to make edits or cancel
-					the order.
+					{createdPinDryRun
+						? "Dry run only — nothing was sent to PUNoted."
+						: "Make sure to save this PIN. You will need it to make edits or cancel the order."}
 				</Typography>
 				<Button
 					variant="contained"
@@ -1795,6 +2074,7 @@ export const ShipBuilder: React.FC<ShipBuilderProps> = ({
 					sx={{ bgcolor: "#7b68ee", color: "white", fontWeight: "bold", mt: 1 }}
 					onClick={() => {
 						setCreatedPin(null);
+						setCreatedPinDryRun(false);
 						onOrderCreated();
 					}}
 				>
@@ -1971,6 +2251,23 @@ const inputStyle = {
 		"& fieldset": { borderColor: "rgba(255,255,255,0.15)" },
 	},
 	"& .MuiInputLabel-root": { color: "rgba(255,255,255,0.6)" },
+};
+
+const metadataFieldStyle = {
+	"& .MuiOutlinedInput-root": {
+		color: "white",
+		height: 38,
+		borderRadius: "8px",
+		"& fieldset": { borderColor: "rgba(255,255,255,0.15)" },
+		"&:hover fieldset": { borderColor: "rgba(123,104,238,0.5)" },
+		"&.Mui-focused fieldset": { borderColor: "#7b68ee" },
+	},
+	"& .MuiInputLabel-root": {
+		color: "rgba(255,255,255,0.55)",
+		fontSize: "12px",
+	},
+	"& .MuiInputBase-input": { fontSize: "12px", py: 1 },
+	"& .MuiSelect-select": { fontSize: "12px", py: 1 },
 };
 
 const formSelectStyle = {

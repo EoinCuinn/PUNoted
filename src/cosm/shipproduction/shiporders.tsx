@@ -55,6 +55,8 @@ export interface ShipType {
 
 export interface ShipOrder {
 	id: number;
+	/** Queue position from the COSM order sheet. */
+	position?: number;
 	customer: string;
 	shipType: ShipType;
 	price: number;
@@ -162,7 +164,8 @@ export const ShipOrders: React.FC<ShipOrdersProps> = ({
 					order.customer.toLowerCase().includes(searchQuery.toLowerCase()) ||
 					(order.notes &&
 						order.notes.toLowerCase().includes(searchQuery.toLowerCase())) ||
-					order.id.toString().includes(searchQuery);
+					order.id.toString().includes(searchQuery) ||
+					(order.position?.toString() ?? "").includes(searchQuery);
 
 				const matchesConfig =
 					selectedConfigFilter === "all" ||
@@ -170,7 +173,15 @@ export const ShipOrders: React.FC<ShipOrdersProps> = ({
 
 				return matchesSearch && matchesConfig;
 			})
-			.sort((a, b) => a.waitTimeDays - b.waitTimeDays);
+			.sort((a, b) => {
+				const posA = a.position ?? Number.MAX_SAFE_INTEGER;
+				const posB = b.position ?? Number.MAX_SAFE_INTEGER;
+				if (posA !== posB) return posA - posB;
+				if (a.waitTimeDays !== b.waitTimeDays) {
+					return a.waitTimeDays - b.waitTimeDays;
+				}
+				return Number(a.id) - Number(b.id);
+			});
 	}, [processedOrders, searchQuery, selectedConfigFilter]);
 
 	// Statistics based on current filtered orders
@@ -494,7 +505,7 @@ export const ShipOrders: React.FC<ShipOrdersProps> = ({
 						<Table size="small" stickyHeader>
 							<TableHead>
 								<TableRow>
-									<TableCell sx={headerStyle}>ID</TableCell>
+									<TableCell sx={headerStyle}>Position</TableCell>
 									<TableCell sx={headerStyle}>Customer</TableCell>
 									<TableCell sx={headerStyle}>Ship Configuration</TableCell>
 									<TableCell sx={headerStyle}>Price</TableCell>
@@ -526,7 +537,7 @@ export const ShipOrders: React.FC<ShipOrdersProps> = ({
 													fontSize: "12.5px",
 												}}
 											>
-												#{order.id.toString().slice(-6)}
+												{order.position ?? "—"}
 											</TableCell>
 											<TableCell
 												sx={{

@@ -91,7 +91,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({
 						color="#7b68ee"
 						sx={{ fontSize: "13px" }}
 					>
-						#{order.id.toString().slice(-6)}
+						{order.position != null ? `#${order.position}` : "—"}
 					</Typography>
 					<Stack direction="row" spacing={0.8} alignItems="center">
 						<Typography

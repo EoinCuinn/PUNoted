@@ -10,6 +10,7 @@ import type {
 import { ShipOrders, type ShipOrdersProps, type ShipOrder } from "./shiporders";
 import { ShipBuilder } from "./shipbuilder";
 import MaterialBalanceTable, { type BalanceItem } from "./materialbalancetable";
+import BuildComparison from "./buildcomparison";
 
 /**
  * Props for the ShipProductionTabs component.
@@ -105,6 +106,7 @@ const ShipProductionTabs: React.FC<ShipProductionTabsProps> = (props) => {
 
 	// Default to index 0 (Ship Orders)
 	const [value, setValue] = useState(0);
+	const [presetToLoad, setPresetToLoad] = useState<string | null>(null);
 
 	const handleChange = useCallback(
 		(_event: React.SyntheticEvent, newValue: number) => {
@@ -167,6 +169,7 @@ const ShipProductionTabs: React.FC<ShipProductionTabsProps> = (props) => {
 					<Tab label="Ship Orders" {...a11yProps(0)} />
 					<Tab label="Ship Production Table" {...a11yProps(1)} />
 					<Tab label="Ship Builder" {...a11yProps(2)} />
+					<Tab label="Build Comparison" {...a11yProps(3)} />
 				</Tabs>
 			</Box>
 
@@ -204,7 +207,23 @@ const ShipProductionTabs: React.FC<ShipProductionTabsProps> = (props) => {
 
 			{/* Tab 2: Ship Builder */}
 			<TabPanel value={value} index={2} sx={{ flexGrow: 1, minHeight: 0 }}>
-				<ShipBuilder mockRole={mockRole} onOrderCreated={handleOrderFinished} />
+				<ShipBuilder
+					key={presetToLoad ?? "builder"}
+					defaultPresetId={presetToLoad ?? undefined}
+					mockRole={mockRole}
+					onOrderCreated={handleOrderFinished}
+				/>
+			</TabPanel>
+
+			{/* Tab 3: Build Comparison */}
+			<TabPanel value={value} index={3} sx={{ flexGrow: 1, minHeight: 0 }}>
+				<BuildComparison
+					isMobile={isMobile}
+					onSelectBuild={(buildId) => {
+						setPresetToLoad(buildId);
+						setValue(2);
+					}}
+				/>
 			</TabPanel>
 
 			{/* Edit Config Full-Page Overlay */}

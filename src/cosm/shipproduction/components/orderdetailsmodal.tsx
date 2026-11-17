@@ -57,13 +57,13 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 							color="rgba(255,255,255,0.4)"
 							sx={{ fontSize: "12px", textTransform: "uppercase" }}
 						>
-							Order Code
+							Position
 						</Typography>
 						<Typography
 							variant="body1"
 							sx={{ fontSize: "13.5px", fontWeight: "bold" }}
 						>
-							#{order.id}
+							{order.position ?? "—"}
 						</Typography>
 					</Box>
 

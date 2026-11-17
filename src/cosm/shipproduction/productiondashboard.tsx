@@ -189,6 +189,7 @@ const MOCK_SHIP_TYPES: ShipType[] = [
 
 interface ApiShipOrder {
 	orderid: number;
+	position?: number;
 	username: string;
 	shiptype: string;
 	price: number;
@@ -307,6 +308,7 @@ interface ProductionDashboardProps {
 const ProductionDashboard: React.FC<ProductionDashboardProps> = ({
 	isMobile,
 }) => {
+	const orderDryRun = import.meta.env.VITE_ORDER_DRY_RUN === "true";
 	const [apiShipOrders, setApiShipOrders] = useState<ShipOrder[]>([]);
 	const [isLoadingShipOrders, setIsLoadingShipOrders] = useState(true);
 	const [storageItems, setStorageItems] = useState<Part[]>([]);
@@ -386,6 +388,7 @@ const ProductionDashboard: React.FC<ProductionDashboardProps> = ({
 						if (!shipType) {
 							return {
 								id: item.orderid,
+								position: item.position,
 								customer: item.username,
 								shipType: MOCK_SHIP_TYPES[0],
 								price: item.price,
@@ -399,6 +402,7 @@ const ProductionDashboard: React.FC<ProductionDashboardProps> = ({
 
 						return {
 							id: item.orderid,
+							position: item.position,
 							customer: item.username,
 							shipType: shipType,
 							price: item.price,
@@ -458,7 +462,12 @@ const ProductionDashboard: React.FC<ProductionDashboardProps> = ({
 	}, []);
 
 	const sortedOrders = useMemo(() => {
-		return [...shipOrders].sort((a, b) => b.id - a.id);
+		return [...shipOrders].sort((a, b) => {
+			const posA = a.position ?? Number.MAX_SAFE_INTEGER;
+			const posB = b.position ?? Number.MAX_SAFE_INTEGER;
+			if (posA !== posB) return posA - posB;
+			return Number(a.id) - Number(b.id);
+		});
 	}, [shipOrders]);
 
 	const processedOrders: ShipOrder[] = useMemo(() => {
@@ -535,6 +544,10 @@ const ProductionDashboard: React.FC<ProductionDashboardProps> = ({
 	};
 
 	const handleDeleteOrder = async (orderId: number) => {
+		if (orderDryRun) {
+			alert("Dry run: order deletion was not sent to PUNoted.");
+			return;
+		}
 		const headers = mockRole === "GUEST" ? { Authorization: "none" } : {};
 		const isGuest = mockRole === "GUEST";
 		const url = isGuest
@@ -580,6 +593,10 @@ const ProductionDashboard: React.FC<ProductionDashboardProps> = ({
 		orderId: number,
 		status: "QUEUED" | "APPROVED" | "IN_PRODUCTION" | "COMPLETED",
 	) => {
+		if (orderDryRun) {
+			alert("Dry run: order status was not updated on PUNoted.");
+			return;
+		}
 		const headers = mockRole === "GUEST" ? { Authorization: "none" } : {};
 		const url = `internal/corporation/ship-orders/${orderId}`;
 

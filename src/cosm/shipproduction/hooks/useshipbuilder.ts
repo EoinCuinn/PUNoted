@@ -5,19 +5,32 @@ import {
 	MOCK_CORP_USERNAMES,
 } from "../utils/constants";
 import { calculateDynamicStats, calculateBOM } from "../utils/formulas";
+import { calculateCxPartsCost } from "../utils/pricing";
+import { COSM_PREBUILT_BUILDS, presetIdentity } from "../data/cosmprebuilts";
 import { fetchClient } from "../../../utils/apiclient";
+import { useGlobalData } from "../../../context/globaldatacontext";
 
 export interface UseShipBuilderProps {
 	mockRole: "ADMIN" | "USER" | "GUEST";
 	onOrderCreated: (guestPin?: string) => void;
 	editingOrderId?: string | null;
+	defaultPresetId?: string;
 }
 
 export function useShipBuilder({
 	mockRole,
 	onOrderCreated,
 	editingOrderId,
+	defaultPresetId,
 }: UseShipBuilderProps) {
+	const { marketData } = useGlobalData();
+	const orderDryRun = import.meta.env.VITE_ORDER_DRY_RUN === "true";
+	const [cxUpdatedAt, setCxUpdatedAt] = useState<number | null>(null);
+	useEffect(() => {
+		if (marketData && Object.keys(marketData).length > 0) {
+			setCxUpdatedAt(Date.now());
+		}
+	}, [marketData]);
 	const [mobileActiveTab, setMobileActiveTab] = useState(0);
 	const [testMode, setTestMode] = useState<boolean>(false);
 	const isAdmin = mockRole === "ADMIN" || testMode;
@@ -26,7 +39,7 @@ export function useShipBuilder({
 		"REGULAR",
 	);
 	const [selectedPresetId, setSelectedPresetId] = useState<string>(
-		isAdmin ? "custom" : "lcbftl",
+		defaultPresetId ?? (isAdmin ? "custom" : "lcbftl"),
 	);
 
 	// DB presets state
@@ -63,7 +76,31 @@ export function useShipBuilder({
 	}, [testMode, mockRole]);
 
 	const availablePresets = useMemo(() => {
-		return testMode ? STATIC_PRESETS : dbPresets;
+		if (testMode) return STATIC_PRESETS;
+
+		// Preload COSM's standard builds so the dropdown works even when the
+		// corporation preset endpoint returns nothing for this user. If a
+		// matching database preset is available, take its live prices (including
+		// the corp rate) while keeping the known bill of materials.
+		const buildIdentities = new Set(
+			COSM_PREBUILT_BUILDS.map((build) => presetIdentity(build.name)),
+		);
+		const dbByIdentity = new Map(
+			dbPresets.map((preset) => [presetIdentity(preset.name || ""), preset]),
+		);
+		const preloadedBuilds = COSM_PREBUILT_BUILDS.map((build) => {
+			const dbMatch = dbByIdentity.get(presetIdentity(build.name));
+			if (!dbMatch) return build;
+			return {
+				...build,
+				price: dbMatch.price ?? build.price,
+				priceCorp: dbMatch.priceCorp ?? build.priceCorp,
+			};
+		});
+		const unmatchedDbPresets = dbPresets.filter(
+			(preset) => !buildIdentities.has(presetIdentity(preset.name || "")),
+		);
+		return [...preloadedBuilds, ...unmatchedDbPresets];
 	}, [testMode, dbPresets]);
 
 	// Top 14 Selectable Component States
@@ -102,12 +139,31 @@ export function useShipBuilder({
 	const [isCustomPrice, setIsCustomPrice] = useState<boolean>(false);
 	const [waitTime, setWaitTime] = useState<number>(5);
 	const [createdPin, setCreatedPin] = useState<string | null>(null);
+	const [createdPinDryRun, setCreatedPinDryRun] = useState(false);
 
 	// Reset state if role changes or test mode toggles
 	useEffect(() => {
+		if (defaultPresetId) {
+			const preset = availablePresets.find(
+				(p) => p.id?.toString() === defaultPresetId,
+			);
+			setSelectedPresetId(defaultPresetId);
+			setSelections(
+				preset?.selections
+					? { ...preset.selections }
+					: { ...STATIC_PRESETS[0].selections },
+			);
+			return;
+		}
+
 		const defaultId = testMode
 			? "lcbftl"
-			: dbPresets[0]?.id?.toString() || "custom";
+			: dbPresets[0]?.id?.toString() ||
+				COSM_PREBUILT_BUILDS[0]?.id ||
+				"custom";
+		const defaultPreset = testMode
+			? STATIC_PRESETS.find((p) => p.id === defaultId)
+			: COSM_PREBUILT_BUILDS.find((p) => p.id === defaultId);
 		setSelectedPresetId(isAdmin ? "custom" : defaultId);
 		setSelections(
 			isAdmin
@@ -127,9 +183,11 @@ export function useShipBuilder({
 						REPAIR_DRONES: "NONE",
 						HIGH_G_SEATS: "NONE",
 					}
-				: { ...STATIC_PRESETS[0].selections },
+				: defaultPreset?.selections
+					? { ...defaultPreset.selections }
+					: { ...STATIC_PRESETS[0].selections },
 		);
-	}, [isAdmin, testMode, dbPresets]);
+	}, [isAdmin, testMode, dbPresets, defaultPresetId, availablePresets]);
 
 	// Prefill logged-in user details
 	useEffect(() => {
@@ -232,20 +290,16 @@ export function useShipBuilder({
 				if (preset.selections) {
 					setSelections({ ...preset.selections });
 				}
-				setPrice(
-					isCorpMember ? preset.priceCorp || preset.price : preset.price,
-				);
 				setIsCustomPrice(false);
 			}
 		}
 	};
 
-	const selectedDbPreset = useMemo(() => {
-		if (testMode) return null;
-		return dbPresets.find(
+	const selectedPreset = useMemo(() => {
+		return availablePresets.find(
 			(p) => p.id?.toString() === selectedPresetId?.toString(),
 		);
-	}, [selectedPresetId, dbPresets, testMode]);
+	}, [selectedPresetId, availablePresets]);
 
 	// Detect if selections differ from preset
 	const presetDiffs = useMemo(() => {
@@ -286,16 +340,23 @@ export function useShipBuilder({
 	}, [selections, dynamicStats, shipClass]);
 
 	const partsList = useMemo(() => {
-		if (selectedDbPreset) {
-			return selectedDbPreset.parts;
+		if (selectedPreset?.parts?.length) {
+			return selectedPreset.parts;
 		}
 		return calculatedPartsList;
-	}, [selectedDbPreset, calculatedPartsList]);
+	}, [selectedPreset, calculatedPartsList]);
+
+	const cxPartsCost = useMemo(() => {
+		const excludedTickers = selectedPreset?.hullPlatesExcluded ? ["LHP"] : [];
+		return calculateCxPartsCost(partsList, marketData, excludedTickers);
+	}, [partsList, marketData, selectedPreset]);
 
 	// Price calculations
 	const suggestedPrice = useMemo(() => {
-		if (selectedDbPreset) {
-			return isCorpMember ? selectedDbPreset.priceCorp : selectedDbPreset.price;
+		if (selectedPreset && !testMode) {
+			return isCorpMember
+				? (selectedPreset.priceCorp ?? selectedPreset.price)
+				: selectedPreset.price;
 		}
 		if (testMode) {
 			return cxTotalPrice;
@@ -321,7 +382,7 @@ export function useShipBuilder({
 		isCorpMember,
 		testMode,
 		cxTotalPrice,
-		selectedDbPreset,
+		selectedPreset,
 	]);
 
 	// Correlation effect
@@ -341,6 +402,10 @@ export function useShipBuilder({
 		}
 		if (!companyCode.trim()) {
 			alert("Please enter a customer company code.");
+			return;
+		}
+		if (!username.trim()) {
+			alert("Please enter a customer username.");
 			return;
 		}
 
@@ -371,6 +436,11 @@ export function useShipBuilder({
 				price: mockRole === "ADMIN" ? price : undefined,
 			};
 
+			if (orderDryRun) {
+				alert("Dry run: order changes were not sent to PUNoted.");
+				return;
+			}
+
 			try {
 				const res = await fetchClient(url, {
 					method: "PUT",
@@ -390,7 +460,9 @@ export function useShipBuilder({
 		);
 
 		const shipTypeData = {
-			id: currentPreset?.id || null,
+			// Database presets have numeric ids; preloaded COSM builds use
+			// string ids, which the API's ShipTypePreset model will not accept.
+			id: typeof currentPreset?.id === "number" ? currentPreset.id : null,
 			presetId: selectedPresetId,
 			name:
 				selectedPresetId === "custom"
@@ -399,12 +471,17 @@ export function useShipBuilder({
 						: "Custom Modular Build"
 					: currentPreset?.name || "Preset Build",
 			price: price,
-			priceCorp: Math.round(price * 0.7),
-			parts: partsList.map((p: any) => ({
-				isAvailable: !!p.isAvailable,
-				name: p.name,
-				quantity: p.quantity,
-			})),
+			priceCorp: selectedPreset?.priceCorp ?? Math.round(price * 0.7),
+			parts: partsList
+				.filter(
+					(p: any) =>
+						!(selectedPreset?.hullPlatesExcluded && p.name === "LHP"),
+				)
+				.map((p: any) => ({
+					isAvailable: !!p.isAvailable,
+					name: p.name,
+					quantity: p.quantity,
+				})),
 			is_admin_preset: currentPreset?.is_admin_preset || false,
 			created_by: currentPreset?.created_by || null,
 			created_at: currentPreset?.created_at || null,
@@ -426,6 +503,12 @@ export function useShipBuilder({
 			waitTimeDays: waitTime,
 			notes: specialNeeds,
 		};
+
+		if (orderDryRun) {
+			setCreatedPinDryRun(true);
+			setCreatedPin(pin);
+			return;
+		}
 
 		try {
 			const res = await fetchClient(url, {
@@ -472,6 +555,7 @@ export function useShipBuilder({
 			setIsCorpMember(false);
 			setIsForSomeoneElse(false);
 
+			setCreatedPinDryRun(false);
 			setCreatedPin(resData.guestPin || pin);
 		} catch (err) {
 			alert(err instanceof Error ? err.message : "Error saving order");
@@ -480,6 +564,11 @@ export function useShipBuilder({
 
 	const handleDeleteOrder = async () => {
 		if (!editingOrderId) return;
+
+		if (orderDryRun) {
+			alert("Dry run: order deletion was not sent to PUNoted.");
+			return;
+		}
 
 		const confirmDelete = window.confirm(
 			"Are you sure you want to delete this order?",
@@ -591,6 +680,11 @@ export function useShipBuilder({
 			return;
 		}
 
+		if (orderDryRun) {
+			alert("Dry run: preset was not saved to PUNoted.");
+			return;
+		}
+
 		const body = {
 			corporation_id: "COSM",
 			name: presetName,
@@ -661,15 +755,19 @@ export function useShipBuilder({
 		setIsCustomPrice,
 		waitTime,
 		createdPin,
+		createdPinDryRun,
 		setCreatedPin,
 		presetDiffs,
 		dynamicStats,
 		partsList,
+		cxPartsCost,
+		cxUpdatedAt,
 		performanceSum,
 		cxTotalPrice,
 		handleSaveOrder,
 		handleDeleteOrder,
 		availablePresets,
+		selectedPreset,
 		handleSavePreset,
 	};
 }
